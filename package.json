@@ -1,0 +1,16 @@
+{
+  "name": "pcg-grading-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Track a PCG Grading certificate, discover its photo API from live browser traffic, and pull the highest-resolution photos available.",
+  "main": "src/pcg-track.js",
+  "scripts": {
+    "track": "node src/pcg-track.js",
+    "mock": "node test/mock-server.js 8799",
+    "test": "node test/run-test.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "engines": { "node": ">=18" }
+}
