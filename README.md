@@ -1,113 +1,132 @@
-# PCG Grading certificate tracker
+# PCG Grading photo extractor
 
-Looks up a grading number on [pcggrading.in](https://www.pcggrading.in/authenticity-verification.aspx),
-discovers which endpoint serves the certificate photos by watching real browser
-traffic, and then finds and downloads the **highest-resolution** version of each
-photo the site will give up.
+Enter a grading number, get the **highest-resolution photos** the
+[pcggrading.in](https://www.pcggrading.in/authenticity-verification.aspx)
+certificate page will give up — saved into a folder on your machine.
 
-Built for grading number `GRN16658IN`, but it takes any number as an argument.
-
----
-
-## Status: the live lookup has not been run yet
-
-This tool is complete and tested, but it **could not be run against the real
-site from the cloud container it was written in**. `www.pcggrading.in` is
-refused by the sandbox's network egress policy, from every available path:
-
-| Path | Result |
-|---|---|
-| `curl` via the agent proxy | `curl: (56) CONNECT tunnel failed, response 403` |
-| `WebFetch` | `EGRESS_BLOCKED: Access to www.pcggrading.in is blocked by the network egress proxy` |
-| Chromium/Playwright | same proxy, same denial |
-
-That is a policy decision at the egress proxy, not a bug in this code, and it is
-not something the tool should route around. **Run it from a machine that can
-reach the site** (see below), or allow the domain for the environment — network
-policy is chosen per environment and documented at
-<https://code.claude.com/docs/en/claude-code-on-the-web>.
-
-Everything except the live fetch is verified: `npm test` exercises the whole
-pipeline end to end against a mock of an ASP.NET WebForms grading site.
+Grading sites show you a small preview. The full-size scan is usually sitting
+right there on the server under a slightly different URL. This finds it.
 
 ---
 
-## Usage
+## Quick start
+
+**You only need [Node.js](https://nodejs.org) — click the big LTS button, install, done.**
+Nothing else. No `npm install`, no browser download.
+
+**Windows** — double-click `PCG-Tracker.bat`
+**Mac / Linux** — double-click `pcg-tracker.command`
+
+It asks for the grading number, then saves the photos.
+
+Or from a terminal:
 
 ```bash
-npm install                 # installs playwright
+node pcg.js GRN16658IN
+```
+
+Photos land in `results/GRN16658IN/images/`.
+
+```
+=== result ==========================================
+Saved 2 photo(s) to results/GRN16658IN/images
+
+   3000x2250     6.8 MP  1737 KB   images/GRN16658IN_01_obv.jpg
+      upgraded from 160x120 -> https://.../GetImage.ashx?cert=GRN16658IN&size=original
+```
+
+---
+
+## If it finds nothing
+
+The site may build its page with JavaScript, which plain HTTP cannot run. Then
+use the browser engine — this is the one time you need to install something:
+
+```bash
+npm install
 npx playwright install chromium
 
-node src/pcg-track.js GRN16658IN
+node pcg.js GRN16658IN --browser --headful
 ```
 
-Useful flags:
+`--headful` opens a visible window so you can watch what happens — if there is a
+captcha, or the number is wrong, you will see it immediately.
 
-| Flag | Meaning |
+Also worth checking:
+
+- Open `results/<NUMBER>/result-http.html` — did the lookup actually find the record?
+- `report.json` lists **every URL that was tried** and what came back.
+- Confirm the grading number is right (it is on the slab label).
+
+## Options
+
+```
+node pcg.js <GRADING_NUMBER> [options]
+
+  --http            plain HTTP only (no browser)        [default: auto]
+  --browser         force the real-browser engine
+  --headful         show the browser window
+  --url <URL>       a different verification page
+  --out <DIR>       where to save   [default: ./results/<NUMBER>]
+  --timeout <MS>    per-request timeout   [default: 30000]
+  --concurrency <N> parallel downloads    [default: 4]
+  --keep-all        also keep images that look like site furniture
+```
+
+## What you get
+
+```
+results/GRN16658IN/
+  images/            the best version of each photo
+  report.json        every URL tried, every size found
+  result-http.html   the certificate page as received
+  result-http.txt    its visible text
+  result.png         full-page screenshot (browser engine only)
+```
+
+---
+
+## How it works
+
+**Two engines, same results.** Plain HTTP is the default because it needs
+nothing installed: it replays the ASP.NET WebForms postback directly, keeping
+the session cookie so the image handler accepts the requests. The browser
+engine runs the page's JavaScript in real Chromium and records every network
+call it makes. If HTTP finds no photos, the browser engine is tried
+automatically when it is available.
+
+**Nothing about the site is hardcoded**, because none of it is documented:
+
+- *The form is found by scoring.* Every text input is ranked on its
+  `name`/`id`/`placeholder` (`grn`, `cert`, `barcode`, `serial`, …) and the best
+  one is filled. `report.json` records the runners-up, so a wrong guess is
+  visible and fixable.
+- *The photo endpoint is found by observation.* HTTP mode scans inline scripts
+  for endpoints and calls the JSON ones itself; browser mode logs every request
+  and captures XHR/fetch response bodies. Either way an undocumented photo API
+  shows up.
+- *Images are gathered from everywhere* — `<img src>`, `srcset`, lazy-load
+  `data-*` attributes, zoom links, CSS backgrounds, and paths mentioned inside
+  API responses. Logos, icons and spinners are filtered out.
+
+**The highest-quality version is proven, not guessed.** Candidate URLs are
+derived from the patterns these sites actually use:
+
+| Pattern | Example |
 |---|---|
-| `--headful` | show the browser, so you can watch the lookup happen |
-| `--out DIR` | where to write results (default `./results`) |
-| `--url URL` | override the verification page |
-| `--timeout MS` | per-step timeout (default 45000) |
-| `--concurrency N` | parallel probe requests (default 4, kept low on purpose) |
+| directory swap | `/thumb/x.jpg` → `/original/x.jpg` |
+| filename marker | `x_s.jpg` → `x.jpg`, `x_large.jpg` |
+| CMS size suffix | `coin-150x150.jpg` → `coin.jpg` |
+| size parameter | `?w=200` → dropped, or `w=4000` (resizers clamp to the original) |
+| named tier | `size=thumb` → `size=original` |
 
-`--headful` is the one to reach for first: if the site adds a captcha or changes
-its markup, you will see it immediately.
+Every candidate is then **downloaded and measured**. The winner is the one with
+the most actual pixels — byte size alone lies, since a re-encoded small image
+can outweigh a larger one. ASP.NET handlers (`.ashx`, `.aspx`) are treated as
+code, not filenames, so only their query strings are varied.
 
-## What it writes
-
-```
-results/
-  report.json        every finding, machine-readable
-  network-log.txt    every request the page made: status, type, content-type, URL
-  result.html        the rendered certificate page
-  result.txt         its visible text
-  result.png         full-page screenshot
-  images/            the best version of each photo, named <GRN>_NN_<hint>.<ext>
-```
-
-## How it finds the photo API
-
-Nothing about the site's markup is hardcoded, because none of it is documented.
-
-1. **The form is found by scoring, not by name.** Every text input is ranked on
-   its `name`/`id`/`placeholder` (`grn`, `cert`, `barcode`, `serial`, …) and on
-   whether it is actually visible, then the best-scoring one is filled. The
-   matching submit control is located within the same `<form>`. `report.json`
-   records the runners-up, so a wrong guess is easy to see and correct.
-2. **Every network call is recorded** — URL, method, resource type, status,
-   content type, and for XHR/fetch/script responses the body itself. A photo
-   endpoint that is called from JavaScript shows up here even though it appears
-   nowhere in the HTML.
-3. **Images are harvested from five places**: `<img src>`, `srcset`, lazy-load
-   `data-*` attributes, `<a href>` zoom links, CSS `background-image`, plus any
-   image path mentioned inside a captured API response body.
-4. Obvious chrome (logos, icons, sprites, spinners, captchas) is filtered out,
-   and anything carrying the grading number is ranked first.
-
-## How it finds the highest-quality photo
-
-For each photo it derives candidate URLs (`src/highres.js`) and then **proves
-which one is best by downloading it and measuring the real pixels** — byte size
-alone lies, since a re-encoded JPEG can be larger than a bigger image.
-
-Candidates come from the patterns grading and CMS sites actually use:
-
-- directory swaps — `/thumb/` → `/original/`, `/full/`, `/large/`, or removed
-- filename markers — `_s`, `_thumb`, `-small` dropped or swapped for `_large`, `_orig`
-- CMS dimension suffixes — `coin-150x150.jpg` → `coin.jpg`
-- query parameters — `w`/`width`/`size`/`quality` dropped, inflated to `4000`
-  (a well-behaved resizer clamps to the original), or set to `large`/`full`/`original`
-- alternate extensions, for sites that keep a lossless master
-
-ASP.NET image handlers (`.ashx`, `.aspx`, `.asmx`) are treated as code, not
-assets, so only their query string is varied — renaming `GetImage.ashx` would
-only generate 404s.
-
-Probes reuse the browser's session cookies, which matters when the image handler
-refuses requests that did not come from a completed lookup. Results are
-de-duplicated by URL **and** by SHA-256, so two paths to the same photo produce
-one file. Downloads are capped at 4 concurrent requests.
+Results are de-duplicated by URL *and* by SHA-256, so several thumbnails that
+lead to the same original produce one file. Downloads run 4 at a time.
 
 ## Tests
 
@@ -118,14 +137,24 @@ npm test
 `test/mock-server.js` stands in for the real site: `__VIEWSTATE` postback, a
 `GetImage.ashx` handler with a clamping `size`/`w` parameter, a `/api/photos`
 JSON endpoint fetched over XHR, a thumbnail whose original lives in a sibling
-directory, and a logo that must be ignored. The suite asserts that the form is
-found, the postback succeeds, the photo API and its body are captured, a
-160×120 thumbnail is upgraded to the 3000×2250 original, saved bytes match the
-reported dimensions, extensions match the real format, and identical photos are
-de-duplicated.
+directory, and a logo that must be ignored. The suite runs **both engines**
+through the real CLI and checks that each finds the form, completes the lookup,
+discovers the photo API, upgrades a 160×120 thumbnail to the 3000×2250
+original, writes files whose bytes and extensions match what was reported, and
+de-duplicates identical photos — plus that an unknown number fails cleanly
+instead of inventing results.
 
-## Note on use
+## A note on the live site
 
-This reads a public authenticity-verification page the way a browser does, for a
-certificate number you hold. It looks up one number at a time and keeps request
-concurrency low. Don't point it at bulk ranges of certificate numbers.
+This was written in a sandbox where `www.pcggrading.in` is blocked by network
+policy, so **it has never been run against the real site** — every test above is
+against the mock. The code makes no assumptions about the site's markup for
+exactly this reason, but the first real run may still need a small adjustment.
+If it comes back empty, `report.json` and `result-http.html` say precisely what
+the site returned, which is what any fix would start from.
+
+## Please use it reasonably
+
+This reads a public verification page the way a browser does, for certificate
+numbers you hold. It looks up one number at a time and keeps concurrency low.
+Don't point it at bulk ranges of certificate numbers.
