@@ -1,132 +1,131 @@
-# PCG Grading photo extractor
+# PCG Photo Extractor
 
-Enter a grading number, get the **highest-resolution photos** the
-[pcggrading.in](https://www.pcggrading.in/authenticity-verification.aspx)
-certificate page will give up — saved into a folder on your machine.
+Ek grading number daaliye — [pcggrading.in](https://www.pcggrading.in/authenticity-verification.aspx)
+ke certificate page se **sabse high-resolution photos** nikal kar aapke computer
+par save ho jayengi.
 
-Grading sites show you a small preview. The full-size scan is usually sitting
-right there on the server under a slightly different URL. This finds it.
+Grading sites chhoti preview dikhati hain. Poora scan aksar wahin server par,
+thoda alag URL par pada hota hai. Ye wahi dhoondh kar nikalta hai.
 
 ---
 
-## Quick start
+## Chalane ka tarika
 
-**You only need [Node.js](https://nodejs.org) — click the big LTS button, install, done.**
-Nothing else. No `npm install`, no browser download.
+**Sirf [Node.js](https://nodejs.org) chahiye** — bada LTS button dabaiye, install
+kijiye, bas. Aur kuch install nahi karna: na `npm install`, na koi browser download.
 
-**Windows** — double-click `PCG-Tracker.bat`
-**Mac / Linux** — double-click `pcg-tracker.command`
+**Windows** — `PCG-Tracker.bat` par double-click
+**Mac / Linux** — `pcg-tracker.command` par double-click
 
-It asks for the grading number, then saves the photos.
+Browser apne aap khul jayega:
 
-Or from a terminal:
+```
+http://localhost:8080
+```
+
+Number daaliye, **Get Photos** dabaiye, photos neeche aa jayengi — resolution ke
+saath, aur har ek par Download button.
+
+<sub>Port busy ho to apne aap agla free port le leta hai (8081, 8082…) — terminal
+window mein sahi address likha hota hai.</sub>
+
+### Terminal se
 
 ```bash
-node pcg.js GRN16658IN
+npm start              # web app
+node pcg.js GRN16658IN # seedha command line se
 ```
 
-Photos land in `results/GRN16658IN/images/`.
-
-```
-=== result ==========================================
-Saved 2 photo(s) to results/GRN16658IN/images
-
-   3000x2250     6.8 MP  1737 KB   images/GRN16658IN_01_obv.jpg
-      upgraded from 160x120 -> https://.../GetImage.ashx?cert=GRN16658IN&size=original
-```
+Photos yahan save hoti hain: `results/<NUMBER>/images/`
 
 ---
 
-## If it finds nothing
+## Kuch na mile to
 
-The site may build its page with JavaScript, which plain HTTP cannot run. Then
-use the browser engine — this is the one time you need to install something:
+Site JavaScript se page banati ho sakti hai, jo plain HTTP nahi chala sakta.
+Web app mein **"Use real browser"** tick kijiye. Pehli baar ek install chahiye:
 
 ```bash
 npm install
 npx playwright install chromium
-
-node pcg.js GRN16658IN --browser --headful
 ```
 
-`--headful` opens a visible window so you can watch what happens — if there is a
-captcha, or the number is wrong, you will see it immediately.
+Ye bhi dekhiye:
 
-Also worth checking:
+- Grading number sahi hai? (slab ke label par likha hota hai)
+- `results/<NUMBER>/result-http.html` — site ne asal mein kya bheja
+- `report.json` — **har woh URL jo try ki gayi**, aur kya jawab aaya
 
-- Open `results/<NUMBER>/result-http.html` — did the lookup actually find the record?
-- `report.json` lists **every URL that was tried** and what came back.
-- Confirm the grading number is right (it is on the slab label).
-
-## Options
+## Options (command line)
 
 ```
 node pcg.js <GRADING_NUMBER> [options]
 
-  --http            plain HTTP only (no browser)        [default: auto]
-  --browser         force the real-browser engine
-  --headful         show the browser window
-  --url <URL>       a different verification page
-  --out <DIR>       where to save   [default: ./results/<NUMBER>]
-  --timeout <MS>    per-request timeout   [default: 30000]
-  --concurrency <N> parallel downloads    [default: 4]
-  --keep-all        also keep images that look like site furniture
+  --http            sirf plain HTTP (browser ki zaroorat nahi)  [default: auto]
+  --browser         real-browser engine zabardasti
+  --headful         browser window dikhaiye
+  --url <URL>       koi doosra verification page
+  --out <DIR>       kahan save karein   [default: ./results/<NUMBER>]
+  --timeout <MS>    per-request timeout  [default: 30000]
+  --concurrency <N> ek saath kitne downloads  [default: 4]
+  --keep-all        site ke logo/icons bhi rakhiye
 ```
 
-## What you get
+## Kya-kya milta hai
 
 ```
 results/GRN16658IN/
-  images/            the best version of each photo
-  report.json        every URL tried, every size found
-  result-http.html   the certificate page as received
-  result-http.txt    its visible text
-  result.png         full-page screenshot (browser engine only)
+  images/            har photo ka sabse achha version
+  report.json        har URL jo try hui, har size jo mila
+  result-http.html   certificate page jaisa aaya
+  result-http.txt    uska dikhne wala text
+  result.png         full-page screenshot (browser engine par)
 ```
 
 ---
 
-## How it works
+## Ye kaam kaise karta hai
 
-**Two engines, same results.** Plain HTTP is the default because it needs
-nothing installed: it replays the ASP.NET WebForms postback directly, keeping
-the session cookie so the image handler accepts the requests. The browser
-engine runs the page's JavaScript in real Chromium and records every network
-call it makes. If HTTP finds no photos, the browser engine is tried
-automatically when it is available.
+**Do engine, ek hi natija.** Plain HTTP default hai kyunki usme kuch install
+nahi karna padta — woh ASP.NET WebForms ka postback seedha replay karta hai aur
+session cookie sambhaalta hai (wahi cookie image handler se photos nikalwati
+hai). Browser engine asli Chromium mein page ka JavaScript chalata hai aur uski
+har network call record karta hai. HTTP se kuch na mile to browser engine apne
+aap try hota hai (agar installed ho).
 
-**Nothing about the site is hardcoded**, because none of it is documented:
+**Site ke baare mein kuch bhi hardcoded nahi hai**, kyunki uska koi documentation
+nahi hai:
 
-- *The form is found by scoring.* Every text input is ranked on its
-  `name`/`id`/`placeholder` (`grn`, `cert`, `barcode`, `serial`, …) and the best
-  one is filled. `report.json` records the runners-up, so a wrong guess is
-  visible and fixable.
-- *The photo endpoint is found by observation.* HTTP mode scans inline scripts
-  for endpoints and calls the JSON ones itself; browser mode logs every request
-  and captures XHR/fetch response bodies. Either way an undocumented photo API
-  shows up.
-- *Images are gathered from everywhere* — `<img src>`, `srcset`, lazy-load
-  `data-*` attributes, zoom links, CSS backgrounds, and paths mentioned inside
-  API responses. Logos, icons and spinners are filtered out.
+- *Form scoring se milta hai.* Har text input ko uske `name`/`id`/`placeholder`
+  (`grn`, `cert`, `barcode`, `serial`…) par number diya jaata hai, sabse zyada
+  score wala bhara jaata hai. Baaki candidates `report.json` mein rehte hain,
+  isliye galat guess turant dikh jaata hai.
+- *Photo endpoint dekh kar milta hai.* HTTP mode inline scripts scan karke JSON
+  endpoints khud call karta hai; browser mode har request log karta hai aur
+  XHR/fetch ki response body pakadta hai.
+- *Images har jagah se* — `<img src>`, `srcset`, lazy-load `data-*`, zoom links,
+  CSS backgrounds, aur API responses ke andar likhe paths. Logo, icon, spinner
+  chhaant diye jaate hain.
 
-**The highest-quality version is proven, not guessed.** Candidate URLs are
-derived from the patterns these sites actually use:
+**Sabse achhi quality guess nahi, sabit hoti hai.** Candidate URLs in patterns se
+bante hain:
 
 | Pattern | Example |
 |---|---|
-| directory swap | `/thumb/x.jpg` → `/original/x.jpg` |
+| directory badalna | `/thumb/x.jpg` → `/original/x.jpg` |
 | filename marker | `x_s.jpg` → `x.jpg`, `x_large.jpg` |
 | CMS size suffix | `coin-150x150.jpg` → `coin.jpg` |
-| size parameter | `?w=200` → dropped, or `w=4000` (resizers clamp to the original) |
+| size parameter | `?w=200` → hataana, ya `w=4000` (resizer original par clamp karta hai) |
 | named tier | `size=thumb` → `size=original` |
 
-Every candidate is then **downloaded and measured**. The winner is the one with
-the most actual pixels — byte size alone lies, since a re-encoded small image
-can outweigh a larger one. ASP.NET handlers (`.ashx`, `.aspx`) are treated as
-code, not filenames, so only their query strings are varied.
+Phir **har candidate download karke uske asli pixels naape jaate hain**. Jeetta
+wahi hai jisme sabse zyada pixels hon — sirf byte size dekhna jhooth bolta hai,
+kyunki re-encoded chhoti image badi ho sakti hai. ASP.NET handlers (`.ashx`,
+`.aspx`) ko code maana jaata hai, filename nahi, isliye sirf unki query string
+badalti hai.
 
-Results are de-duplicated by URL *and* by SHA-256, so several thumbnails that
-lead to the same original produce one file. Downloads run 4 at a time.
+Natije URL aur SHA-256 dono se dedupe hote hain, to ek hi original tak jaane
+wali kai thumbnails se ek hi file banti hai. Ek saath 4 download chalte hain.
 
 ## Tests
 
@@ -134,27 +133,28 @@ lead to the same original produce one file. Downloads run 4 at a time.
 npm test
 ```
 
-`test/mock-server.js` stands in for the real site: `__VIEWSTATE` postback, a
-`GetImage.ashx` handler with a clamping `size`/`w` parameter, a `/api/photos`
-JSON endpoint fetched over XHR, a thumbnail whose original lives in a sibling
-directory, and a logo that must be ignored. The suite runs **both engines**
-through the real CLI and checks that each finds the form, completes the lookup,
-discovers the photo API, upgrades a 160×120 thumbnail to the 3000×2250
-original, writes files whose bytes and extensions match what was reported, and
-de-duplicates identical photos — plus that an unknown number fails cleanly
-instead of inventing results.
+`test/mock-server.js` asli site ki jagah khada hota hai: `__VIEWSTATE` postback,
+`GetImage.ashx` handler jo `size`/`w` ko clamp karta hai, `/api/photos` JSON
+endpoint jo XHR se aata hai, ek thumbnail jiska original bagal ki directory mein
+hai, aur ek logo jo ignore hona chahiye. Suite **dono engines** ko asli CLI se
+chalati hai aur check karti hai ki dono form dhoondhte hain, lookup poora karte
+hain, photo API pakadte hain, 160×120 thumbnail ko 3000×2250 original tak le
+jaate hain, files ke bytes aur extension report se match karte hain, aur
+identical photos dedupe hoti hain — saath hi ye bhi ki galat number par saaf
+fail hota hai, jhooti photos nahi banti.
 
-## A note on the live site
+## Asli site ke baare mein ek zaroori baat
 
-This was written in a sandbox where `www.pcggrading.in` is blocked by network
-policy, so **it has never been run against the real site** — every test above is
-against the mock. The code makes no assumptions about the site's markup for
-exactly this reason, but the first real run may still need a small adjustment.
-If it comes back empty, `report.json` and `result-http.html` say precisely what
-the site returned, which is what any fix would start from.
+Ye sandbox mein likha gaya hai jahan `www.pcggrading.in` network policy se
+blocked hai, isliye **ye asli site par kabhi nahi chala** — upar ke saare tests
+mock par hue hain. Code isiliye site ke markup ke baare mein koi assumption
+nahi karta, par pehli asli run par thoda adjustment lag sakta hai. Khaali aaye
+to `report.json` aur `result-http.html` bilkul saaf bata denge ki site ne kya
+bheja — fix wahin se shuru hoga.
 
-## Please use it reasonably
+## Thoda dhyan rakhiye
 
-This reads a public verification page the way a browser does, for certificate
-numbers you hold. It looks up one number at a time and keeps concurrency low.
-Don't point it at bulk ranges of certificate numbers.
+Ye ek public verification page ko waise hi padhta hai jaise browser padhta hai,
+un certificate numbers ke liye jo aapke paas hain. Ek baar mein ek number, aur
+concurrency kam rakhi gayi hai. Ise certificate numbers ki bulk range par mat
+chalaiye.

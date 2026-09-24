@@ -1,23 +1,26 @@
 #!/bin/bash
-# Double-click launcher for macOS and Linux.
+# Double-click launcher for macOS and Linux: starts the local web app.
 cd "$(dirname "$0")" || exit 1
+
+pause_if_tty() { if [ -t 0 ]; then read -r -p "$1"; fi; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo
-  echo "  Node.js is not installed."
+  echo "  Node.js install nahi hai."
   echo
-  echo "  Install it once from https://nodejs.org (pick the LTS button),"
-  echo "  then double-click this file again."
+  echo "  https://nodejs.org kholiye, bada LTS button dabaiye,"
+  echo "  install kijiye, phir is file par dobara double-click kijiye."
   echo
-  read -r -p "  Press Enter to close..."
+  pause_if_tty "  Press Enter to close..."
   exit 1
 fi
 
-node pcg.js "$@"
+echo
+echo "  Starting... browser apne aap khulega."
+echo
+node server.js "$@"
 status=$?
-if [ $status -ne 0 ]; then
-  echo
-  echo "  Nothing was saved. See the checklist above."
-fi
-read -r -p "Press Enter to close..."
+echo
+echo "  Server band ho gaya."
+pause_if_tty "  Press Enter to close..."
 exit $status

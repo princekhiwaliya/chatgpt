@@ -1,24 +1,25 @@
 @echo off
 setlocal
-title PCG Grading photo extractor
+title PCG Photo Extractor
 cd /d "%~dp0"
 
 where node >nul 2>&1
 if errorlevel 1 (
   echo.
-  echo   Node.js is not installed.
+  echo   Node.js install nahi hai.
   echo.
-  echo   Install it once from https://nodejs.org  ^(pick the LTS button^),
-  echo   then double-click this file again.
+  echo   https://nodejs.org kholiye, bada LTS button dabaiye,
+  echo   install kijiye, phir is file par dobara double-click kijiye.
   echo.
   pause
   exit /b 1
 )
 
-node pcg.js %*
+echo.
+echo   Starting... browser apne aap khulega.
+echo.
+node server.js %*
 
-if errorlevel 1 (
-  echo.
-  echo   Nothing was saved. See the checklist above.
-)
+echo.
+echo   Server band ho gaya.
 pause

@@ -1,17 +1,22 @@
 {
   "name": "pcg-grading-tracker",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "Look up a PCG Grading certificate and save the highest-resolution photos it exposes. Runs with no dependencies; optionally uses a real browser.",
-  "main": "pcg.js",
-  "bin": { "pcg": "pcg.js" },
+  "description": "Local web app that looks up a PCG Grading certificate and saves the highest-resolution photos it exposes. Runs with no dependencies.",
+  "main": "server.js",
+  "bin": {
+    "pcg": "pcg.js"
+  },
   "scripts": {
-    "start": "node pcg.js",
+    "start": "node server.js",
+    "cli": "node pcg.js",
     "mock": "node test/mock-server.js 8799",
     "test": "node test/run-test.js"
   },
   "optionalDependencies": {
     "playwright": "^1.49.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
